@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import './globals.css'
 import { Navbar } from '@/components/layout/navbar'
 import { Footer } from '@/components/layout/footer'
+import { Providers } from '@/components/providers'
 
 export const metadata: Metadata = {
   title: 'UGC Army — Connect Brands with Authentic Creators',
@@ -17,9 +18,11 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className="antialiased">
-        <Navbar />
-        <main className="relative z-10">{children}</main>
-        <Footer />
+        <Providers>
+          <Navbar />
+          <main className="relative z-10">{children}</main>
+          <Footer />
+        </Providers>
       </body>
     </html>
   )
