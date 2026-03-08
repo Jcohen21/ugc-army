@@ -3,9 +3,7 @@ import Stripe from 'stripe'
 import { auth } from '@/auth'
 import { prisma } from '@/lib/prisma'
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2026-02-25.clover',
-})
+export const dynamic = 'force-dynamic'
 
 const PLANS = {
   starter: {
@@ -32,6 +30,15 @@ export async function POST(req: NextRequest) {
   if (!plan || !(plan in PLANS)) {
     return NextResponse.json({ error: 'Invalid plan' }, { status: 400 })
   }
+
+  const stripeSecretKey = process.env.STRIPE_SECRET_KEY
+  if (!stripeSecretKey) {
+    return NextResponse.json({ error: 'Stripe not configured' }, { status: 500 })
+  }
+
+  const stripe = new Stripe(stripeSecretKey, {
+    apiVersion: '2026-02-25.clover',
+  })
 
   const planConfig = PLANS[plan as keyof typeof PLANS]
   const baseUrl = process.env.NEXTAUTH_URL || 'http://localhost:3000'
