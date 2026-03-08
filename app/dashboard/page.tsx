@@ -1,82 +1,8 @@
-import { ShoppingBag, TrendingUp, DollarSign, Clock, ArrowUpRight, ArrowRight } from 'lucide-react'
+import { ShoppingBag, TrendingUp, DollarSign, Clock, ArrowUpRight, ArrowRight, CreditCard } from 'lucide-react'
 import Link from 'next/link'
-
-// Mock data — will be replaced with real Prisma queries after UGC-4 (auth) and UGC-5 (Stripe)
-const mockUser = { name: 'Alex Morgan' }
-
-const stats = [
-  {
-    label: 'Total Orders',
-    value: '24',
-    change: '+3 this month',
-    up: true,
-    icon: ShoppingBag,
-  },
-  {
-    label: 'Active Campaigns',
-    value: '5',
-    change: '2 in review',
-    up: true,
-    icon: TrendingUp,
-  },
-  {
-    label: 'Total Spent',
-    value: '$8,420',
-    change: '+$1,299 this month',
-    up: true,
-    icon: DollarSign,
-  },
-  {
-    label: 'Avg. Turnaround',
-    value: '31h',
-    change: '↓ 6h vs last month',
-    up: true,
-    icon: Clock,
-  },
-]
-
-const recentOrders = [
-  {
-    id: 'ORD-1041',
-    campaign: 'Summer Skincare Launch',
-    creator: 'Jenna R.',
-    amount: '$349',
-    status: 'delivered',
-    date: 'Mar 6, 2026',
-  },
-  {
-    id: 'ORD-1040',
-    campaign: 'App Install Push',
-    creator: 'Marcus T.',
-    amount: '$199',
-    status: 'in_review',
-    date: 'Mar 5, 2026',
-  },
-  {
-    id: 'ORD-1039',
-    campaign: 'Summer Skincare Launch',
-    creator: 'Priya M.',
-    amount: '$349',
-    status: 'delivered',
-    date: 'Mar 4, 2026',
-  },
-  {
-    id: 'ORD-1038',
-    campaign: 'Holiday Gift Guide',
-    creator: 'Sam K.',
-    amount: '$499',
-    status: 'delivered',
-    date: 'Mar 2, 2026',
-  },
-  {
-    id: 'ORD-1037',
-    campaign: 'App Install Push',
-    creator: 'Leo V.',
-    amount: '$199',
-    status: 'pending',
-    date: 'Mar 1, 2026',
-  },
-]
+import { auth } from '@/auth'
+import { prisma } from '@/lib/prisma'
+import { redirect } from 'next/navigation'
 
 const statusStyles: Record<string, string> = {
   delivered: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
@@ -90,7 +16,48 @@ const statusLabels: Record<string, string> = {
   pending: 'Pending',
 }
 
-export default function DashboardPage() {
+const paymentStatusStyles: Record<string, string> = {
+  paid: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
+  pending: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
+  failed: 'bg-red-500/10 text-red-400 border-red-500/20',
+}
+
+// Mock orders — will be replaced with real data once Campaign/Order models are added
+const mockOrders = [
+  { id: 'ORD-1041', campaign: 'Summer Skincare Launch', creator: 'Jenna R.', amount: '$349', status: 'delivered', date: 'Mar 6, 2026' },
+  { id: 'ORD-1040', campaign: 'App Install Push', creator: 'Marcus T.', amount: '$199', status: 'in_review', date: 'Mar 5, 2026' },
+  { id: 'ORD-1039', campaign: 'Summer Skincare Launch', creator: 'Priya M.', amount: '$349', status: 'delivered', date: 'Mar 4, 2026' },
+  { id: 'ORD-1038', campaign: 'Holiday Gift Guide', creator: 'Sam K.', amount: '$499', status: 'delivered', date: 'Mar 2, 2026' },
+  { id: 'ORD-1037', campaign: 'App Install Push', creator: 'Leo V.', amount: '$199', status: 'pending', date: 'Mar 1, 2026' },
+]
+
+export default async function DashboardPage() {
+  const session = await auth()
+  if (!session?.user?.id) redirect('/login')
+
+  const payments = await prisma.payment.findMany({
+    where: { userId: session.user.id },
+    orderBy: { createdAt: 'desc' },
+    take: 5,
+  })
+
+  const totalSpent = payments
+    .filter((p) => p.status === 'paid')
+    .reduce((sum, p) => sum + p.amount, 0)
+
+  const stats = [
+    { label: 'Total Orders', value: '24', change: '+3 this month', up: true, icon: ShoppingBag },
+    { label: 'Active Campaigns', value: '5', change: '2 in review', up: true, icon: TrendingUp },
+    {
+      label: 'Total Spent',
+      value: payments.length > 0 ? `$${(totalSpent / 100).toLocaleString()}` : '$0',
+      change: payments.length > 0 ? `${payments.filter(p => p.status === 'paid').length} payment(s)` : 'No payments yet',
+      up: totalSpent > 0,
+      icon: DollarSign,
+    },
+    { label: 'Avg. Turnaround', value: '31h', change: '↓ 6h vs last month', up: true, icon: Clock },
+  ]
+
   return (
     <div className="px-6 md:px-10 py-8 md:py-12 max-w-6xl">
       {/* Header */}
@@ -102,7 +69,7 @@ export default function DashboardPage() {
         >
           Welcome back,
           <br />
-          <span className="text-[#ff5500]">{mockUser.name}.</span>
+          <span className="text-[#ff5500]">{session.user.name ?? session.user.email}.</span>
         </h1>
       </div>
 
@@ -125,9 +92,7 @@ export default function DashboardPage() {
               >
                 {stat.value}
               </p>
-              <p className="text-[10px] uppercase tracking-widest text-[#6b7280] mb-2">
-                {stat.label}
-              </p>
+              <p className="text-[10px] uppercase tracking-widest text-[#6b7280] mb-2">{stat.label}</p>
               <p className="text-xs text-[#3d4147]">{stat.change}</p>
             </div>
           )
@@ -135,7 +100,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Recent orders */}
-      <div className="border border-[#252729] rounded-sm overflow-hidden bg-[#0f1012]">
+      <div className="border border-[#252729] rounded-sm overflow-hidden bg-[#0f1012] mb-6">
         <div className="flex items-center justify-between px-6 py-4 border-b border-[#252729]">
           <h2
             className="font-display text-lg font-bold uppercase text-[#f0ede8] tracking-wide"
@@ -147,43 +112,32 @@ export default function DashboardPage() {
             href="/dashboard/campaigns"
             className="text-xs text-[#ff5500] hover:text-[#ff6e1f] flex items-center gap-1 transition-colors uppercase tracking-wider"
           >
-            View all
-            <ArrowRight className="w-3 h-3" />
+            View all <ArrowRight className="w-3 h-3" />
           </Link>
         </div>
-
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-[#252729]">
                 {['Order', 'Campaign', 'Creator', 'Amount', 'Status', 'Date'].map((h) => (
-                  <th
-                    key={h}
-                    className="px-6 py-3 text-left text-[10px] uppercase tracking-[0.15em] text-[#6b7280] font-medium"
-                  >
+                  <th key={h} className="px-6 py-3 text-left text-[10px] uppercase tracking-[0.15em] text-[#6b7280] font-medium">
                     {h}
                   </th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {recentOrders.map((order, i) => (
+              {mockOrders.map((order, i) => (
                 <tr
                   key={order.id}
-                  className={`border-b border-[#252729] hover:bg-[#1c1e21]/40 transition-colors duration-100 ${
-                    i === recentOrders.length - 1 ? 'border-b-0' : ''
-                  }`}
+                  className={`border-b border-[#252729] hover:bg-[#1c1e21]/40 transition-colors duration-100 ${i === mockOrders.length - 1 ? 'border-b-0' : ''}`}
                 >
                   <td className="px-6 py-4 font-mono text-xs text-[#6b7280]">{order.id}</td>
                   <td className="px-6 py-4 text-[#f0ede8] text-sm">{order.campaign}</td>
                   <td className="px-6 py-4 text-[#9ca3af] text-sm">{order.creator}</td>
                   <td className="px-6 py-4 text-[#f0ede8] font-medium text-sm">{order.amount}</td>
                   <td className="px-6 py-4">
-                    <span
-                      className={`inline-flex items-center px-2.5 py-0.5 rounded-sm text-[10px] uppercase tracking-wider font-medium border ${
-                        statusStyles[order.status]
-                      }`}
-                    >
+                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-sm text-[10px] uppercase tracking-wider font-medium border ${statusStyles[order.status]}`}>
                       {statusLabels[order.status]}
                     </span>
                   </td>
@@ -195,8 +149,76 @@ export default function DashboardPage() {
         </div>
       </div>
 
+      {/* Payment history */}
+      <div className="border border-[#252729] rounded-sm overflow-hidden bg-[#0f1012] mb-6">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-[#252729]">
+          <div className="flex items-center gap-2">
+            <CreditCard className="w-4 h-4 text-[#ff5500]" />
+            <h2
+              className="font-display text-lg font-bold uppercase text-[#f0ede8] tracking-wide"
+              style={{ fontFamily: 'var(--font-display)', fontWeight: 700 }}
+            >
+              Payment History
+            </h2>
+          </div>
+          <Link
+            href="/pricing"
+            className="text-xs text-[#ff5500] hover:text-[#ff6e1f] flex items-center gap-1 transition-colors uppercase tracking-wider"
+          >
+            Upgrade <ArrowRight className="w-3 h-3" />
+          </Link>
+        </div>
+
+        {payments.length === 0 ? (
+          <div className="px-6 py-12 text-center">
+            <p className="text-sm text-[#6b7280] mb-4">No payments yet.</p>
+            <Link
+              href="/pricing"
+              className="inline-flex items-center gap-2 bg-[#ff5500] text-white px-6 py-2.5 text-xs font-bold uppercase tracking-wider rounded-sm hover:bg-[#e64d00] transition-colors"
+            >
+              View Plans <ArrowRight className="w-3 h-3" />
+            </Link>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-[#252729]">
+                  {['Date', 'Plan', 'Amount', 'Status'].map((h) => (
+                    <th key={h} className="px-6 py-3 text-left text-[10px] uppercase tracking-[0.15em] text-[#6b7280] font-medium">
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {payments.map((payment, i) => (
+                  <tr
+                    key={payment.id}
+                    className={`border-b border-[#252729] hover:bg-[#1c1e21]/40 transition-colors duration-100 ${i === payments.length - 1 ? 'border-b-0' : ''}`}
+                  >
+                    <td className="px-6 py-4 text-[#6b7280] text-xs">
+                      {new Date(payment.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                    </td>
+                    <td className="px-6 py-4 text-[#f0ede8] text-sm capitalize">{payment.plan ?? '—'}</td>
+                    <td className="px-6 py-4 text-[#f0ede8] font-medium text-sm">
+                      ${(payment.amount / 100).toLocaleString()}
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-sm text-[10px] uppercase tracking-wider font-medium border ${paymentStatusStyles[payment.status] ?? paymentStatusStyles.pending}`}>
+                        {payment.status}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
       {/* Quick actions */}
-      <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <Link
           href="/dashboard/campaigns/new"
           className="group flex items-center justify-between border border-[#252729] hover:border-[#ff5500]/40 bg-[#0f1012] px-6 py-5 rounded-sm transition-colors duration-200"
